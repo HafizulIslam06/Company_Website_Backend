@@ -1,0 +1,71 @@
+﻿using Company_Backend.Data;
+using Company_Backend.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System;
+
+namespace Company_Backend.Controllers
+{
+    [Authorize(Roles = "Admin")]
+    [Route("api/[controller]")]
+    [ApiController]
+    public class UserController : ControllerBase
+    {
+        private readonly ApplicationDbContext _context;
+        public UserController(ApplicationDbContext context) => _context = context;
+
+        [HttpGet]
+        [Authorize(Roles = "Admin,General")]
+        public async Task<ActionResult<IEnumerable<User>>> GetUsers() => await _context.Users.ToListAsync();
+
+        [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,General")]
+        public async Task<ActionResult<User>> GetUser(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound();
+            return user;
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult<User>> CreateUser(User user)
+        {
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(user.PasswordHash);
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+            return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
+        }
+
+        [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateUser(int id, User updatedUser)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound();
+
+            user.Username = updatedUser.Username;
+            user.Role = updatedUser.Role;
+
+            if (!string.IsNullOrWhiteSpace(updatedUser.PasswordHash))
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(updatedUser.PasswordHash);
+
+            _context.Entry(user).State = EntityState.Modified;
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteUser(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound();
+
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+    }
+}
